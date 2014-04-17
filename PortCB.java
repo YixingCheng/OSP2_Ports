@@ -18,6 +18,8 @@ import osp.Utilities.*;
 
 public class PortCB extends IflPortCB
 {
+    private int bufferIn;
+    private int bufferOut;
     /**
        Creates a new port. This constructor must have
 
@@ -30,7 +32,7 @@ public class PortCB extends IflPortCB
     public PortCB()
     {
         // your code goes here
-
+       super();
     }
 
     /**
@@ -42,7 +44,7 @@ public class PortCB extends IflPortCB
     public static void init()
     {
         // your code goes here
-
+        System.out.println("I am doing OSP2 Ports Project");
     }
 
     /** 
@@ -56,7 +58,27 @@ public class PortCB extends IflPortCB
     public static PortCB do_create()
     {
         // your code goes here
+        PortCB newPort = new PortCB();
 
+        TaskCB currentTask = null;                                                                 //get the requesting thread
+
+        try {
+             currentTask = MMU.getPTBR().getTask();                                            
+         } catch (NullPointerException e){        
+         }
+        
+        int currentPortNum = currentTask.addPort(newPort);
+        if( currentPortNum == FAILURE){
+               return null;
+           }
+        
+        newPort.setTask(currentTask);
+        newPort.setStatus(PortLive);
+        
+        newPort.bufferIn = 0;
+        newPort.bufferOut = 0 + PortBufferLength;
+
+        return PortCB; 
     }
 
     /** Destroys the specified port, and unblocks all threads suspended 

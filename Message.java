@@ -24,7 +24,7 @@ public class Message extends IflMessage
     public Message(int length)
     {
         // your code goes here
-
+       super(length);
     }
 
 
