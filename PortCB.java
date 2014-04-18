@@ -1,3 +1,11 @@
+/*  CSCE311 Project4 Ports
+ *  University of South Carolina
+ *  author: Yixing Cheng
+ *  date: 4/17/2014
+ *  PortCB.java
+ *
+*/
+
 package osp.Ports;
 
 import java.util.*;
@@ -67,8 +75,11 @@ public class PortCB extends IflPortCB
          } catch (NullPointerException e){        
          }
         
-        int currentPortNum = currentTask.addPort(newPort);
-        if( currentPortNum == FAILURE){
+        int currentPortNum = currentTask.getPortCount();
+        if(currentPortNum == MaxPortsPerTask)
+               return null;
+
+        if( currentTask.addPort(newPort) == FAILURE){
                return null;
            }
         
@@ -76,9 +87,9 @@ public class PortCB extends IflPortCB
         newPort.setStatus(PortLive);
         
         newPort.bufferIn = 0;
-        newPort.bufferOut = 0 + PortBufferLength;
+        newPort.bufferOut = 0;
 
-        return PortCB; 
+        return newPort; 
     }
 
     /** Destroys the specified port, and unblocks all threads suspended 
@@ -89,7 +100,13 @@ public class PortCB extends IflPortCB
     public void do_destroy()
     {
         // your code goes here
+        this.setStatus(PortDestroyed);
+        
+        this.notifyThreads();
+        
+        this.getTask().removePort(this);
 
+        this.setTask(null);
     }
 
     /**
@@ -105,7 +122,67 @@ public class PortCB extends IflPortCB
     public int do_send(Message msg)
     {
         // your code goes here
+       if( msg == null || (msg.getLength() > PortBufferLength)){
+               return FAILURE;
+          }
+       
+       SystemEvent newEvent = new SystemEvent("send_msg_suspension");
+              
+       TaskCB currentTask = null;                                                                 //get the requesting thread
+       ThreadCB currentThread = null;
 
+       try {
+          currentTask = MMU.getPTBR().getTask();                                            
+          currentThread = currentTask.getCurrentThread();
+         }catch (NullPointerException e){        
+         }       
+       
+       currentThread.suspend(newEvent);
+       
+       int bufferRoom;
+       boolean suspendMsg = true;
+       while(suspendMsg)   {
+            
+            if( this.bufferIn < this.bufferOut){
+                   bufferRoom = this.bufferOut - this.bufferIn;
+              }
+            else if( this.bufferIn == this.bufferOut){
+                   if(this.isEmpty()){
+                         bufferRoom = PortBufferLength;
+                      }
+                   else{
+                         bufferRoom = 0;
+                      }
+              }
+            else{
+                   bufferRoom = PortBufferLength + this.bufferOut - this.bufferIn;
+              }
+            
+            if( msg.getLength() <= bufferRoom){
+                   suspendMsg = false;
+              }
+            else{
+                   currentThread.suspend(this);
+              }
+            
+            if( currentThread.getStatus() == ThreadKill){
+                   this.removeThread(currentThread);
+                   return FAILURE;
+              }
+
+            if( this.getStatus() != PortLive){
+                  newEvent.notifyThreads();
+                  return FAILURE;
+              }
+ 
+          }
+       
+       this.appendMessage(msg);
+       this.notifyThreads();
+
+       this.bufferIn = (this.bufferIn + msg.getLength()) % PortBufferLength;
+       newEvent.notifyThreads();
+       return SUCCESS;
     }
 
     /** Receive a message from the port. Only the owner is allowed to do this.
@@ -120,7 +197,49 @@ public class PortCB extends IflPortCB
     public Message do_receive() 
     {
         // your code goes here
+       TaskCB currentTask = null;                                                                 //get the requesting thread
+       ThreadCB currentThread = null;
 
+       try {
+          currentTask = MMU.getPTBR().getTask();                                            
+          currentThread = currentTask.getCurrentThread();
+         }catch (NullPointerException e){        
+         }
+
+       if(this.getTask() != currentTask){
+              return null;
+         }       
+ 
+       SystemEvent newEvent = new SystemEvent("receive_msg_suspension");
+       currentThread.suspend(newEvent);
+       
+       boolean suspendMsg = true;
+       while(suspendMsg){
+           if(this.isEmpty()){
+                 currentThread.suspend(this);
+             }
+           else{
+                 suspendMsg = false;
+             }
+
+            if( currentThread.getStatus() == ThreadKill){
+                   this.removeThread(currentThread);
+                   newEvent.notifyThreads();
+                   return null;
+              }
+
+            if( this.getStatus() != PortLive){
+                  newEvent.notifyThreads();
+                  return null;
+              }   
+          }
+       
+       Message currentMsg = this.removeMessage();
+       this.bufferOut = (this.bufferOut + currentMsg.getLength()) % PortBufferLength; 
+       this.notifyThreads();
+       newEvent.notifyThreads();
+
+       return currentMsg;       
     }
 
     /** Called by OSP after printing an error message. The student can
@@ -133,7 +252,7 @@ public class PortCB extends IflPortCB
     public static void atError()
     {
         // your code goes here
-
+      
     }
 
     /** Called by OSP after printing a warning message. The student

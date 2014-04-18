@@ -1,3 +1,11 @@
+/*  CSCE311 Project4 Ports
+ *  University of South Carolina
+ *  author: Yixing Cheng
+ *  date: 4/17/2014
+ *  Message.java
+ *
+*/
+
 package osp.Ports;
 
 import osp.Utilities.*;
